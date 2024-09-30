@@ -3,73 +3,67 @@ import os
 import dotenv
 import discord
 from discord.ext import commands
-from utils.TrackUser import monitor_user, rename_user
+from utils.TrackUser import monitor_user
+from utils.RenameUser import rename_user
+from utils.CheckChannel import check_channel
 import datetime
 
 dotenv.load_dotenv()
 token = str(os.getenv('TOKEN'))
 
 intents = discord.Intents.all()
-
 bot = discord.Bot(intents=intents)
 
+# Constants
+COMMAND_CHANNEL_NAME = "shadow-realm-commands"
+SHADOW_LEVELS = ["Shadow Realm", "Shadower Realm", "The Shadowest Realm"]
+
+# Global State
 monitoring_tasks = {}
 original_nicknames = {}
 user_shadow_levels = {}
 user_channels = {}
-command_channel_name = "shadow-realm-commands"
-shadow_levels = ["Shadow Realm", "Shadower Realm", "The Shadowest Realm"]
+white_list = {0, 502839436619546627}
 
 
 @bot.event
 async def on_ready():
     print(f'We have logged in as {bot.user}')
+    if bot.user:
+        white_list.add(bot.user.id)
     for guild in bot.guilds:
-        for level in shadow_levels:
-            channel = discord.utils.get(guild.voice_channels, name=level)
-            if channel is None:
-                await guild.create_voice_channel(level)
-
-        command_channel = discord.utils.get(guild.text_channels, name=command_channel_name)
-        if command_channel is None:
-            command_channel = await guild.create_text_channel(command_channel_name)
-
-        await command_channel.set_permissions(guild.default_role, read_messages=True, send_messages=True)
-        await command_channel.set_permissions(bot.user, read_messages=True, send_messages=True, manage_messages=True)
-
-        print(f"Command channel is set to {command_channel.name} in guild {guild.name}")
+        await setup_guild_channels(guild)
 
 
 @bot.command()
-@commands.has_permissions(manage_nicknames=True)
-async def shadow_realm(ctx, user: discord.Member, time_sec: int = 1):
+async def shadow_realm(ctx, user: discord.Option(discord.Member), time_sec: discord.Option(int) = 1):
     """A nice way to send user to a shadow realm"""
 
-    current_channel = user.voice.channel if user.voice else None
-
-    current_level = user_shadow_levels.get(user.id, 0)
-    if current_level >= len(shadow_levels):
+    if not await check_channel(ctx, COMMAND_CHANNEL_NAME):
         return
 
-    channel_name = shadow_levels[current_level]
+    if user.id in white_list:
+        await handle_exempt_user(ctx, user)
+        return
+
+    current_channel = user.voice.channel if user.voice else None
+    current_level = user_shadow_levels.get(user.id, 0)
+
+    if current_level >= len(SHADOW_LEVELS):
+        return
+
+    channel_name = SHADOW_LEVELS[current_level]
     channel = discord.utils.get(ctx.guild.voice_channels, name=channel_name)
 
     if user.id in monitoring_tasks:
         current_level += 1
-        if current_level >= len(shadow_levels):
+        if current_level >= len(SHADOW_LEVELS):
             await ctx.respond("This user is already in the deepest **Shadow Realm**")
             return
 
-        channel_name = shadow_levels[current_level]
-        channel = discord.utils.get(ctx.guild.voice_channels, name=channel_name)
-
-    if channel is None:
-        channel = await ctx.guild.create_voice_channel(channel_name)
-
-    if user.id == bot.user.id or user.id == 502839436619546627:
-        await ctx.respond("Good try kid 😈")
-        await rename_user(ctx.author, "The Foul")
-        return
+        channel_name = SHADOW_LEVELS[current_level]
+        channel = discord.utils.get(ctx.guild.voice_channels,
+                                    name=channel_name) or await ctx.guild.create_voice_channel(channel_name)
 
     try:
         await user.move_to(channel)
@@ -94,9 +88,11 @@ async def shadow_realm(ctx, user: discord.Member, time_sec: int = 1):
 
 
 @bot.command(name="remove")
-@commands.has_permissions(manage_nicknames=True)
-async def remove_shadow_realm(ctx, user: discord.Member):
+async def remove_shadow_realm(ctx, user: discord.Option(discord.Member)):
     """Remove user from the shadow realm"""
+
+    if not await check_channel(ctx, COMMAND_CHANNEL_NAME):
+        return
 
     if ctx.author.id == user.id:
         await ctx.respond("https://tenor.com/view/nuh-uh-beocord-no-lol-gif-24435520")
@@ -117,6 +113,28 @@ async def remove_shadow_realm(ctx, user: discord.Member):
 
     user_shadow_levels.pop(user.id, None)
     user_channels.pop(user.id, None)
+
+
+async def setup_guild_channels(guild: discord.Guild):
+    for level in SHADOW_LEVELS:
+        channel = discord.utils.get(guild.voice_channels, name=level)
+        if channel is None:
+            await guild.create_voice_channel(level)
+
+    command_channel = discord.utils.get(guild.text_channels, name=COMMAND_CHANNEL_NAME)
+    if command_channel is None:
+        command_channel = await guild.create_text_channel(COMMAND_CHANNEL_NAME)
+
+    await command_channel.set_permissions(guild.default_role, read_messages=True, send_messages=True)
+    await command_channel.set_permissions(bot.user, read_messages=True, send_messages=True, manage_messages=True)
+
+    print(f"Command channel is set to {command_channel.name} in guild {guild.name}")
+
+
+async def handle_exempt_user(ctx: commands.Context, user: discord.Member):
+    await ctx.respond("Good try kid 😈")
+    if ctx.author.id != 502839436619546627:
+        await rename_user(ctx.author, "The Foul")
 
 
 bot.run(token)
