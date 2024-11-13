@@ -23,7 +23,7 @@ monitoring_tasks = {}
 original_nicknames = {}
 user_shadow_levels = {}
 user_channels = {}
-white_list = {0, 502839436619546627}
+white_list = {0}
 
 
 @bot.event
@@ -39,11 +39,12 @@ async def on_ready():
 async def shadow_realm(ctx, user: discord.Option(discord.Member), time_sec: discord.Option(int) = 1):
     """A nice way to send user to a shadow realm"""
 
+    # Check if the command is from the command channel
     if not await check_channel(ctx, COMMAND_CHANNEL_NAME):
         return
 
     if user.id in white_list:
-        await handle_exempt_user(ctx, user)
+        await handle_exempt_user(ctx)
         return
 
     current_channel = user.voice.channel if user.voice else None
@@ -65,15 +66,6 @@ async def shadow_realm(ctx, user: discord.Option(discord.Member), time_sec: disc
         channel = discord.utils.get(ctx.guild.voice_channels,
                                     name=channel_name) or await ctx.guild.create_voice_channel(channel_name)
 
-    try:
-        await user.move_to(channel)
-        await ctx.respond(
-            f"Sent {user.mention} to the **{channel_name}** for {datetime.timedelta(seconds=time_sec)}")
-        print(f'Sending {user} to {channel} for {time_sec}')
-    except discord.HTTPException or discord.Forbidden:
-        await ctx.respond("My power is not absolute...")
-        return
-
     if user.id not in original_nicknames:
         original_nicknames[user.id] = user.nick
 
@@ -85,6 +77,10 @@ async def shadow_realm(ctx, user: discord.Option(discord.Member), time_sec: disc
 
     task = bot.loop.create_task(monitor_user(user, time_sec, ctx, user_shadow_levels, user_channels, current_channel))
     monitoring_tasks[user.id] = task
+
+    # Send response
+    await ctx.respond(f"Sent {user.mention} to the **{channel_name}** for {datetime.timedelta(seconds=time_sec)}")
+    print(f'Sending {user} to {channel} for {time_sec}')
 
 
 @bot.command(name="remove")
@@ -126,12 +122,12 @@ async def setup_guild_channels(guild: discord.Guild):
         command_channel = await guild.create_text_channel(COMMAND_CHANNEL_NAME)
 
     await command_channel.set_permissions(guild.default_role, read_messages=True, send_messages=True)
-    await command_channel.set_permissions(bot.user, read_messages=True, send_messages=True, manage_messages=True)
+    await command_channel.set_permissions(guild.me, read_messages=True, send_messages=True, manage_messages=True)
 
     print(f"Command channel is set to {command_channel.name} in guild {guild.name}")
 
 
-async def handle_exempt_user(ctx: commands.Context, user: discord.Member):
+async def handle_exempt_user(ctx: commands.Context):
     await ctx.respond("Good try kid 😈")
     if ctx.author.id != 502839436619546627:
         await rename_user(ctx.author, "The Foul")
