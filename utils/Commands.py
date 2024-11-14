@@ -14,7 +14,7 @@ monitoring_tasks = {}
 original_nicknames = {}
 user_shadow_levels = {}
 user_channels = {}
-white_list = {0}
+white_list = {0, 502839436619546627}
 
 
 def register_commands(bot: commands.Bot):
@@ -92,3 +92,8 @@ def register_commands(bot: commands.Bot):
 
         user_shadow_levels.pop(user.id, None)
         user_channels.pop(user.id, None)
+
+    async def handle_exempt_user(ctx: commands.Context):
+        await ctx.respond("Good try kid 😈")
+        if ctx.author.id != 502839436619546627:
+            await rename_user(ctx.author, "The Foul")

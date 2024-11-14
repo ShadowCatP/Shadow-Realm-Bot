@@ -38,11 +38,4 @@ async def setup_guild_channels(guild: discord.Guild):
 
     print(f"Command channel is set to {command_channel.name} in guild {guild.name}")
 
-
-async def handle_exempt_user(ctx: commands.Context):
-    await ctx.respond("Good try kid 😈")
-    if ctx.author.id != 502839436619546627:
-        await rename_user(ctx.author, "The Foul")
-
-
 bot.run(token)
